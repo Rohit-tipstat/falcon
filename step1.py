@@ -8,7 +8,6 @@ from langsmith import Client as LangSmithClient
 from langsmith.run_helpers import traceable
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from langserve import add_routes
 
 # Configure logging
 logging.basicConfig(
