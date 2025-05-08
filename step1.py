@@ -5,7 +5,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from openai import OpenAI
 from langsmith import Client as LangSmithClient
-from langsmith.run_helpers import traceable
+from langsmith import traceable
+from langsmith.wrappers import wrap_openai
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -35,7 +36,7 @@ class WasteCompositionResponse(BaseModel):
 # Initialize OpenAI client
 try:
     openai_key = os.environ['OPENAI_API_KEY']
-    client = OpenAI(api_key=openai_key)
+    client = wrap_openai(OpenAI(api_key=openai_key))
     logger.info("OpenAI client initialized successfully")
 except KeyError:
     logger.error("OPENAI_API_KEY not found in environment variables")
@@ -72,9 +73,9 @@ app.add_middleware(
 )
 
 @traceable(run_type="chain", project_name="waste_composition_api")
-async def get_waste_composition(pincode: str) -> WasteCompositionResponse:
+async def get_waste_composition(area: str) -> WasteCompositionResponse:
     """Core function to fetch waste composition data"""
-    logger.info(f"Processing waste composition request for pincode: {pincode}")
+    logger.info(f"Processing waste composition request for area: {area}")
     try:
         # Make API call to OpenAI
         response = client.responses.create(
@@ -83,10 +84,12 @@ async def get_waste_composition(pincode: str) -> WasteCompositionResponse:
                 "type": "web_search_preview",
                 "search_context_size": "high",
             }],
-            input=f"""What is the composition of Muncipal Solid Waste for pincode {pincode}? I need the composition in percentage. Make sure you always provide the correct sources link from where you have extracted the informations.
+            input=f"""What is the composition of Muncipal Solid Waste for area {area}? I need the composition in percentage. Make sure you always provide the correct sources link from where you have extracted the informations.
             Make sure you avoid extracting information from government websites, rely on latest research papers, university research, and other reliable sources.
             The composition always should include the following elements only: paper and paper board materials, glass, metals, plastics, yard trimmings, food, wood, rubber, leather, textiles and other materials.
-            The total composition should be 100% and the sum of all the elements should be equal to 100%. If the information is not available for the given pincode, please provide the information for the nearest pincode. 
+            The total composition should be 100% and the sum of all the elements should be equal to 100%. If the information is not available for the given area, please provide the information for the nearest area.
+            If the zipcode is not a valid zipcode then return empty list.
+            If the composition then return a message as "No information available for the given zipcode" 
             """,
         )
         structured_result = response.output[1].content[0].text
@@ -119,13 +122,13 @@ async def get_waste_composition(pincode: str) -> WasteCompositionResponse:
         if len(response.output[1].content[0].annotations) > 0:
             for i in range(len(response.output[1].content[0].annotations)):
                 dictionary_link.append(response.output[1].content[0].annotations[i].url)
-            logger.info(f"Extracted {len(dictionary_link)} citations for pincode {pincode}")
+            logger.info(f"Extracted {len(dictionary_link)} citations for area {area}")
 
         dictionary_composition = dict()
         if len(response_formatted.output_parsed.composition_dict) > 0:
             for i in range(len(response_formatted.output_parsed.composition_dict)):
                 dictionary_composition[response_formatted.output_parsed.composition_dict[i].composition_name] = response_formatted.output_parsed.composition_dict[i].composition_percentage
-            logger.info(f"Extracted composition data for {len(dictionary_composition)} materials for pincode {pincode}")
+            logger.info(f"Extracted composition data for {len(dictionary_composition)} materials for area {area}")
 
         # Validate total percentage
         total_percentage = sum(dictionary_composition.values())
@@ -135,33 +138,33 @@ async def get_waste_composition(pincode: str) -> WasteCompositionResponse:
             "composition": dictionary_composition
         }
         if abs(total_percentage - 100.0) > 0.03:
-            logger.warning(f"Total percentage {total_percentage}% does not sum to 100% for pincode {pincode}")
+            logger.warning(f"Total percentage {total_percentage}% does not sum to 100% for area {area}")
             return [response_data]
 
-        logger.info(f"Successfully processed composition data for pincode {pincode}")
+        logger.info(f"Successfully processed composition data for area {area}")
         return [response_data]
 
     except Exception as e:
-        logger.error(f"Error processing pincode {pincode}: {str(e)}")
+        logger.error(f"Error processing area {area}: {str(e)}")
         return WasteCompositionResponse(
             citation_dict=[],
             message=f"Error processing request: {str(e)}"
         )
 
-@app.get("/waste-composition/{pincode}")
-async def waste_composition_endpoint(pincode: str):
-    """Endpoint to get waste composition for a given pincode"""
-    logger.info(f"Received request for pincode: {pincode}")
+@app.get("/waste-composition/{area}")
+async def waste_composition_endpoint(area: str):
+    """Endpoint to get waste composition for a given area"""
+    logger.info(f"Received request for area: {area}")
     try:
-        result = await get_waste_composition(pincode)
-        logger.info(f"Successfully processed request for pincode {pincode}")
+        result = await get_waste_composition(area)
+        logger.info(f"Successfully processed request for area {area}")
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content=result
         )
         
     except Exception as e:
-        logger.error(f"Internal server error for pincode {pincode}: {str(e)}")
+        logger.error(f"Internal server error for area {area}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}"
