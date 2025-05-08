@@ -1,2 +1,8 @@
 .env
 falcon-env/
+.gitignore
+__pycache__/
+rough_work/
+*backup.py
+falcon/
+*.log
