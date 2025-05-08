@@ -2,8 +2,7 @@
 falcon-env/
 .gitignore
 __pycache__/
-rough_work/
+rough_work/*
 *backup.py
 falcon/
 *.log
-rough.ipynb
