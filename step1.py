@@ -110,7 +110,9 @@ async def get_waste_composition(area: str) -> WasteCompositionResponse:
                8. rubber \n
                9. leather \n
                10. textiles \n
-               11. other materials.\n 
+               11. Construction & demolition debris	\n
+               12. electronic waste \n
+               13. others(hazardous, diapers, etc.) \n
 
             The composition element can be sometimes named some thing else. make sure you extrcat it if falls under the above category.\n
             The total composition should be 100% and the sum of all the elements should be equal to 100%.\n
